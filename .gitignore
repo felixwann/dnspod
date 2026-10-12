@@ -1,0 +1,83 @@
+# C# / Windows Forms 常用规则，按当前项目裁剪。
+# 参考：https://git-scm.com/docs/gitignore
+# 参考：https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
+# 通用规则不表示当前项目已经使用相应工具。
+
+# Visual Studio 本机缓存、窗口状态及用户设置
+.vs/
+*.suo
+*.user
+*.rsuser
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# MSBuild / .NET 构建输出（涵盖子项目及平台子目录）
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Aa]rtifacts/
+*.pdb
+*.ilk
+*.obj
+*.idb
+*.tmp
+*.tmp_proj
+*.tlog
+*.binlog
+*.[Cc]ache
+!?*.[Cc]ache/
+
+# NuGet 可还原包及打包产物；保留包清单、锁文件和 NuGet 配置
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nupkg
+*.snupkg
+
+# 单元测试、覆盖率及性能分析输出
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coveragexml
+*.dotCover
+BenchmarkDotNet.Artifacts/
+*.psess
+*.vsp
+*.vspx
+
+# ReSharper / Rider 本机缓存及个人设置
+_ReSharper*/
+*.DotSettings.user
+.idea/**/workspace.xml
+.idea/**/shelf/
+
+# ClickOnce 发布输出、个人发布设置及包含私钥的证书
+[Pp]ublish/
+*.publishsettings
+*.pfx
+*.p12
+# 共享发布配置（*.pubxml）保留；个人 *.pubxml.user 由 *.user 忽略。
+
+# Visual Studio 升级报告及临时备份
+_UpgradeReport_Files/
+UpgradeLog*.XML
+UpgradeLog*.htm
+*.bak
+*~
+
+# Windows 文件管理器缓存
+Thumbs.db
+Desktop.ini
+
+# 当前项目：DnsProviders.NetworkLog 在程序目录下生成 logs/network-日期.log。
+# 日志含 DNS 请求和响应，不纳入版本控制；规则同时覆盖不同运行目录。
+[Ll]ogs/
+*.log
+
+# 当前项目：账号凭据由 CredentialStore 保存到 Windows 凭据管理器，
+# 不存在需要忽略的项目内凭据文件。
+# 保留 *.cs、*.Designer.cs、*.resx、*.settings、*.config、*.sln、*.csproj，
+# 以及 Properties/ 和源码引用的图片、图标、DLL 等资源。
