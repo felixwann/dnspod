@@ -19,28 +19,47 @@ namespace dnspod
         private static void CheckRecord(CloudCredential c, DnsDomain d, DnsRecord original)
         {
             foreach (DnsRecord record in Records(c, d))
-                if (record.Id == original.Id && record.Host == original.Host && record.Type == original.Type && record.Value == original.Value && record.Line == original.Line && record.Ttl == original.Ttl && record.Priority == original.Priority && record.Status == original.Status && record.Weight == original.Weight) return;
+                if (record.Id == original.Id && record.Host == original.Host && record.Type == original.Type && record.Value == original.Value && record.Line == original.Line && record.Ttl == original.Ttl && record.Priority == original.Priority && record.Status == original.Status && record.Weight == original.Weight && record.Remark == original.Remark) return;
             throw new InvalidOperationException("记录已变化或不存在，请刷新列表后重新操作。");
         }
-        public static void Update(CloudCredential c, DnsDomain d, DnsRecord r, string host, string type, string value)
+        public static void Update(CloudCredential c, DnsDomain d, DnsRecord r, string host, string type, string value, string remark)
         {
             if (String.IsNullOrEmpty(host) || String.IsNullOrEmpty(type) || String.IsNullOrEmpty(value)) throw new InvalidOperationException("主机记录、类型和记录值不能为空。");
+            bool recordChanged = r.Host != host || r.Type != type || r.Value != value;
+            bool remarkChanged = (r.Remark ?? "") != (remark ?? "");
+            if (!recordChanged && !remarkChanged) return;
             CheckRecord(c, d, r);
-            Dictionary<string, string> args = new Dictionary<string, string> { { "RecordId", r.Id }, { "Value", value } };
-            if (!String.IsNullOrEmpty(r.Ttl)) args["TTL"] = r.Ttl;
-            if (c.Provider == CloudProvider.Aliyun)
+            if (recordChanged)
             {
-                args["RR"] = host; args["Type"] = type; args["Line"] = r.Line;
-                if (type == "MX") args["Priority"] = String.IsNullOrEmpty(r.Priority) ? "10" : r.Priority;
-                Json(AliCall(c, "UpdateDomainRecord", args));
+                Dictionary<string, string> args = new Dictionary<string, string> { { "RecordId", r.Id }, { "Value", value } };
+                if (!String.IsNullOrEmpty(r.Ttl)) args["TTL"] = r.Ttl;
+                if (c.Provider == CloudProvider.Aliyun)
+                {
+                    args["RR"] = host; args["Type"] = type; args["Line"] = r.Line;
+                    if (type == "MX") args["Priority"] = String.IsNullOrEmpty(r.Priority) ? "10" : r.Priority;
+                    Json(AliCall(c, "UpdateDomainRecord", args));
+                }
+                else
+                {
+                    args["Domain"] = d.Name; args["SubDomain"] = host; args["RecordType"] = type; args["RecordLine"] = r.Line;
+                    if (type == "MX" || type == "HTTPS" || type == "SVCB") args["MX"] = String.IsNullOrEmpty(r.Priority) ? "10" : r.Priority;
+                    if (!String.IsNullOrEmpty(r.Status)) args["Status"] = r.Status;
+                    if (!String.IsNullOrEmpty(r.Weight)) args["Weight"] = r.Weight;
+                    TencentCall(c, "ModifyRecord", args);
+                }
             }
-            else
+            if (remarkChanged)
             {
-                args["Domain"] = d.Name; args["SubDomain"] = host; args["RecordType"] = type; args["RecordLine"] = r.Line;
-                if (type == "MX" || type == "HTTPS" || type == "SVCB") args["MX"] = String.IsNullOrEmpty(r.Priority) ? "10" : r.Priority;
-                if (!String.IsNullOrEmpty(r.Status)) args["Status"] = r.Status;
-                if (!String.IsNullOrEmpty(r.Weight)) args["Weight"] = r.Weight;
-                TencentCall(c, "ModifyRecord", args);
+                try
+                {
+                    Dictionary<string, string> args = new Dictionary<string, string> { { "RecordId", r.Id }, { "Remark", remark ?? "" } };
+                    if (c.Provider == CloudProvider.Aliyun) Json(AliCall(c, "UpdateDomainRecordRemark", args));
+                    else { args["Domain"] = d.Name; TencentCall(c, "ModifyRecordRemark", args); }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException((recordChanged ? "解析内容已更新，但备注未确认保存。" : "备注未确认保存。") + "请刷新核实后再操作。\n\n" + ex.Message, ex);
+                }
             }
         }
         private static IList<DnsDomain> AliDomains(CloudCredential c)
@@ -55,7 +74,7 @@ namespace dnspod
             {
                 IDictionary root = Json(AliCall(c, "DescribeDomainRecords", new Dictionary<string, string> { { "DomainName", d.Name }, { "PageNumber", page.ToString(System.Globalization.CultureInfo.InvariantCulture) }, { "PageSize", "100" } }));
                 IList batch = Items(root, "DomainRecords", "Record");
-                foreach (IDictionary x in batch) list.Add(new DnsRecord { Id = S(x, "RecordId"), Type = S(x, "Type"), Host = S(x, "RR"), Value = S(x, "Value"), Line = S(x, "Line"), CreatedAt = S(x, "Status"), Ttl = S(x, "TTL"), Priority = S(x, "Priority"), Status = S(x, "Status") });
+                foreach (IDictionary x in batch) list.Add(new DnsRecord { Id = S(x, "RecordId"), Type = S(x, "Type"), Host = S(x, "RR"), Value = S(x, "Value"), Line = S(x, "Line"), CreatedAt = S(x, "Status"), Ttl = S(x, "TTL"), Priority = S(x, "Priority"), Status = S(x, "Status"), Remark = S(x, "Remark") });
                 if (batch.Count < 100) return list;
             }
         }
@@ -84,7 +103,7 @@ namespace dnspod
             {
                 IDictionary r = Json(TencentCall(c, "DescribeRecordList", new Dictionary<string, string> { { "Domain", d.Name }, { "Offset", offset.ToString(System.Globalization.CultureInfo.InvariantCulture) }, { "Limit", "100" }, { "ErrorOnEmpty", "no" } }));
                 IList batch = Items(r, "RecordList");
-                foreach (IDictionary x in batch) list.Add(new DnsRecord { Id = S(x, "RecordId"), Type = S(x, "Type"), Host = S(x, "Name"), Value = S(x, "Value"), Line = S(x, "Line"), CreatedAt = S(x, "UpdatedOn"), Ttl = S(x, "TTL"), Priority = S(x, "MX"), Status = S(x, "Status"), Weight = S(x, "Weight") });
+                foreach (IDictionary x in batch) list.Add(new DnsRecord { Id = S(x, "RecordId"), Type = S(x, "Type"), Host = S(x, "Name"), Value = S(x, "Value"), Line = S(x, "Line"), CreatedAt = S(x, "UpdatedOn"), Ttl = S(x, "TTL"), Priority = S(x, "MX"), Status = S(x, "Status"), Weight = S(x, "Weight"), Remark = S(x, "Remark") });
                 if (batch.Count < 100) return list;
             }
         }
@@ -169,7 +188,7 @@ namespace dnspod
         private static string JsonEncode(IDictionary<string, string> v) { Dictionary<string, object> values = new Dictionary<string, object>(); foreach (KeyValuePair<string, string> p in v) { if (p.Key == "RecordId" || p.Key == "Offset" || p.Key == "Limit" || p.Key == "MX" || p.Key == "TTL" || p.Key == "Weight") values[p.Key] = Int64.Parse(p.Value, System.Globalization.CultureInfo.InvariantCulture); else values[p.Key] = p.Value; } return new JavaScriptSerializer().Serialize(values); }
         private static IList Items(IDictionary x, params string[] path) { object o = x; foreach (string p in path) { IDictionary d = o as IDictionary; if (d == null || !d.Contains(p)) return new ArrayList(); o = d[p]; } return o as IList ?? new ArrayList(); }
         private static string S(IDictionary x, string key) { return x != null && x.Contains(key) && x[key] != null ? Convert.ToString(x[key]) : ""; }
-        private static string Enc(string s) { return Uri.EscapeDataString(s).Replace("%20", "+").Replace("%2F", "%2F"); }
+        private static string Enc(string s) { return Uri.EscapeDataString(s).Replace("*", "%2A").Replace("%7E", "~"); }
         private static string HmacSha1(string key, string value) { using (HMACSHA1 h = new HMACSHA1(Encoding.UTF8.GetBytes(key))) return Convert.ToBase64String(h.ComputeHash(Encoding.UTF8.GetBytes(value))); }
         private static string Sha256(string value) { using (SHA256 h = SHA256.Create()) return Hex(h.ComputeHash(Encoding.UTF8.GetBytes(value))); }
         private static string Hex(byte[] b) { StringBuilder x = new StringBuilder(); foreach (byte n in b) x.Append(n.ToString("x2")); return x.ToString(); }

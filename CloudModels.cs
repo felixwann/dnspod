@@ -31,6 +31,7 @@ namespace dnspod
         public string Priority;
         public string Status;
         public string Weight;
+        public string Remark;
         public override string ToString() { return Host + "  " + Type + "  " + Value; }
     }
 }
